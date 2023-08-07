@@ -17,11 +17,11 @@ Skript の新機能とリリースのテストを手伝いたいですか? Playe
   
 え？PlayerRealms Skript Communityがどこかわからないって？Googleで探せば出るのでGoogleで調べ~~ろ~~ください。
 ## Compiling
-SkEditorはコンパイルに[Hot Soup Processor v3.6](https://hsp.tv/)を使用します。ＨＳＰスクリプトエディタを使用して、``SkEditor.hsp``を開きます。。その後、[ＨＳＰ(P)]→[実行ファイル自動作成(A)](Ctrl + F9)を使用しSkEditorをコンパイルし、実行ファイルにするだけです。
+SkEditorはコンパイルに[Hot Soup Processor v3.6](https://hsp.tv/)を使用します。ＨＳＰスクリプトエディタを使用して、``SkEditor.hsp``を開きます。。その後、[ＨＳＰ(P)]→[実行ファイル自動作成(A)] (Ctrl + F9)を使用しSkEditorをコンパイルし、実行ファイルにするだけです。
 ![ＨＳＰスクリプトエディタのスクリーンショット](https://i.imgur.com/tLgrLuL.png)
 ソース コードは[リリースページ](https://github.com/nennneko5787/SkEditor/releases/)から入手できます。このリポジトリのクローンを作成することもできますが、そのコードは安定していない可能性があります。
 ### テスト
-ＨＳＰスクリプトエディタでコードをテストしたいだけの場合は、[ＨＳＰ(P)]→[コンパイル・実行(C)](F5)を使用してください。
+ＨＳＰスクリプトエディタでコードをテストしたいだけの場合は、[ＨＳＰ(P)]→[コンパイル・実行(C)] (F5)を使用してください。
 ### Visual Studio Codeの使用
 [この記事](https://qiita.com/yama_1983/items/4d02b52c2698108d4bbd)をの通りにVisual Studio Codeを設定し、[F1]キー→[hsp:Automatic exe file creation]を使用し、SkEditorをコンパイルし、実行ファイルにします。  
   
