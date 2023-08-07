@@ -1,0 +1,22 @@
+#module
+#uselib "kernel32.dll"
+#cfunc LCMapString        "LCMapStringA" int, int, sptr, int, var, int
+#cfunc GetUserDefaultLCID "GetUserDefaultLCID"
+#const LCMAP_LOWERCASE           0x00000100  ; lower case letters
+#const LCMAP_UPPERCASE           0x00000200  ; upper case letters
+#const LCMAP_SORTKEY             0x00000400  ; WC sort key (normalize)
+#const LCMAP_BYTEREV             0x00000800  ; byte reversal
+#const LCMAP_HIRAGANA            0x00100000  ; map katakana to hiragana
+#const LCMAP_KATAKANA            0x00200000  ; map hiragana to katakana
+#const LCMAP_HALFWIDTH           0x00400000  ; map double byte to single byte
+#const LCMAP_FULLWIDTH           0x00800000  ; map single byte to double byte
+#const LCMAP_LINGUISTIC_CASING   0x01000000  ; use linguistic rules for casing
+#const LCMAP_SIMPLIFIED_CHINESE  0x02000000  ; map traditional chinese to simplified chinese
+#const LCMAP_TRADITIONAL_CHINESE 0x04000000  ; map simplified chinese to traditional chinese
+; ¬•¶š‰pš‚ğ‘å•¶š‰pš‚É•ÏŠ·
+#defcfunc Upper str s1, var v1, int p1
+	return LCMapString(GetUserDefaultLCID(), LCMAP_UPPERCASE, s1, -1, v1, p1)
+; ‘å•¶š‰pš‚ğ¬•¶š‰pš‚É•ÏŠ·
+#defcfunc Lower str s1, var v1, int p1
+	return LCMapString(GetUserDefaultLCID(), LCMAP_LOWERCASE, s1, -1, v1, p1)
+#global

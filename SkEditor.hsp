@@ -1,0 +1,414 @@
+#include "mod_menu.as"
+#include "user32.as"
+#include "kernel32.as"
+#include "hspext.as"
+#include "Scintilla.hsp"
+#include "mod_fontdlg.as"
+#include "tab.hsp"
+#include "encode.as"
+#include "String.hsp"
+#uselib "Lexilla.dll"
+#cfunc CreateLexer "CreateLexer" str
+#cfunc GetLibraryPropertyNames "GetLibraryPropertyNames"
+
+;#enum string
+
+//定義
+#define SkEditorVersion "v0.1.0"
+#define WM_NOTIFY 0x004E
+#define global ctype IsWchar(%1) ((%1>=129 & %1<=159) or (%1>=224 & %1<=252))
+
+#packopt hide 1
+#const def_w 640	//ウィンドウの初期横幅
+#const def_h 480	//ウィンドウの初期縦幅
+#const min_w 320	//ウィンドウの最小横幅
+#const min_h 240	//ウィンドウの最小縦幅
+
+#module
+#defcfunc IsUsedWindow int id
+mref bmscr, 96 + id
+return varptr(bmscr) != 0
+#global
+
+#module
+//HSP標準のwidthは正確にウィンドウサイズの変更ができない模様。
+//(古いWindowsを基準にしていて、Windows10の仕様に対応していない？)
+//正確にサイズを変更できるwidth2命令を自作。
+#define global width2(%1=-1,%2=-1,%3=0x80000000,%4=0x80000000,%5=0) _width2 %1,%2,%3,%4,%5
+#deffunc _width2 int _w,int _h,int _x,int _y,int use_menu
+	opt=0x4	//SWP_NOZORDER
+	if _w<0 : w=ginfo_winx : else : w=_w
+	if _h<0 : h=ginfo_winy : else : h=_h
+	if (w=ginfo_winx)&(h=ginfo_winy) : opt|=0x1	//SWP_NOSIZEを追加
+	if _x=0x80000000 : x=ginfo_wx1 : else : x=_x
+	if _y=0x80000000 : y=ginfo_wy1 : else : y=_y
+	if (x=ginfo_wx1)&(y=ginfo_wy1) : opt|=0x2	//SWP_NOMOVEを追加
+	if opt=0x7 : return
+	dim rect,4 : rect=0,0,w,h
+	GetWindowLong hwnd,-16	//ウィンドウスタイルを取得
+	st=stat
+	GetWindowLong hwnd,-20	//拡張ウィンドウスタイルを取得
+	est=stat
+	AdjustWindowRectEx varptr(rect),st,use_menu!=0,est	//ウィンドウサイズの補正を行う
+	w=rect(2)-rect(0) : h=rect(3)-rect(1)
+	SetWindowPos hwnd,0,x,y,w,h,opt	//ウィンドウの位置とサイズを変更
+	return
+#global
+
+screen 0,ginfo_dispx,ginfo_dispy,2	//最大化できるように画面いっぱいの幅でウィンドウを初期化
+title "SkEditor - (無題)"
+
+GetWindowLong hwnd,-16
+SetWindowLong hwnd,-16,stat | 0x00010000 | 0x00040000	//ウィンドウスタイルにWS_MAXIMIZEBOXとWS_SIZEBOXを追加
+//参考：http://chokuto.ifdef.jp/urawaza/prm/window_style.html
+
+width2 def_w,def_h
+gsel 0,1
+
+onexit gosub *exit
+
+oncmd gosub *resize,0x5	//WM_SIZE。ウィンドウサイズ変更時にここにジャンプする。
+//参考：http://chokuto.ifdef.jp/urawaza/message/WM_SIZE.html
+
+oncmd gosub *OnCommand, WM_COMMAND	//  メッセージ割り込み
+oncmd gosub *notify, WM_NOTIFY
+// サブメニュー作成
+newmenu hfilemenu, 1
+addmenu hfilemenu, "設定(&S)", 2
+addmenu hfilemenu, "", 0,0x0800
+addmenu hfilemenu, "終了(&Q)", 1
+
+// トップメニュー作成
+newmenu hmenu, 0
+addmenu hmenu, "ファイル(&F)", hfilemenu, 0x10
+
+applymenu hmenu
+
+//DLLロード
+hLib = LoadLibraryA("Scintilla.dll")
+if hLib == 0 : dialog "!hLib" : end
+
+;	ステータスバー作成、objinfo関数でハンドルを取得
+winobj "msctls_statusbar32", "SkEditor Initializing...", , $50000000
+hStatus = objinfo(stat, 2)
+dim rect,4
+GetWindowRect hStatus,varptr(rect) : height=rect(3)-rect(1)	//height:ステータスバーの高さ
+
+dirlist2h 1
+dirlist2 size,"*.sk",1,0
+sdim list,size
+dirlist2r list
+;dialog list
+objsize 150,ginfo_winy-height
+objmode 1,0
+listbox hlistI,0,list
+st = stat
+hList = objinfo_hwnd(stat)
+objprm st,-1
+SetWindowPos hList,0,0,0,150,ginfo_winy-height,0
+
+//Scintilla作成
+CreateWindowEx 0, "Scintilla", "Scintilla", 0x52010000, 150, 0, ginfo_winx - 150, ginfo_winy - height, hwnd, 0x8000, hinstance, 0
+hEdit = stat
+if stat == -1 : dialog "!Scintilla" : end
+
+//Lexer設定
+sendmsg hEdit, SCI_SETILEXER, 0, CreateLexer("cpp")
+
+//キーワード設定
+notesel keyws
+noteload "stdkeyword.txt"
+;keyws = "on join"
+sendmsg hEdit, SCI_SETKEYWORDS, 0, varptr(keyws)
+
+//標準スタイル設定
+sendmsg hEdit,SCI_STYLESETFONT,32,msgothic ;"LightNovelPopV2 V2"
+sendmsg hEdit,SCI_STYLESETSIZE,32,11
+sendmsg hEdit,SCI_SETMARGINWIDTHN,0,39
+sendmsg hEdit,SCI_STYLESETFORE,STYLE_LINENUMBER,$0000FF
+sendmsg hEdit,SCI_STYLESETBACK,STYLE_LINENUMBER,$00FF00
+sendmsg hEdit,SCI_STYLESETFONT,STYLE_LINENUMBER,msgothic ;"LightNovelPopV2 V2"
+sendmsg hEdit,SCI_STYLESETSIZE,STYLE_LINENUMBER,11
+
+//クリアして標準に合わせる
+sendmsg hEdit, SCI_STYLECLEARALL
+
+gosub *setstyle
+sendmsg hStatus, $401, 0, "SkEditor Ready!"
+SetFocus hEdit
+stop
+
+*resize
+	if (wParam=0)|(wParam=2) {
+		//ウィンドウのサイズが変わった時。
+		//ウィンドウの横幅か縦幅が最小値未満になった場合、強制的に最小値にリサイズ。
+		//(もっと良い方法がありそうな気もするが、見つからなかったのでこの方法で)
+		adj_w=ginfo_winx : adj_h=ginfo_winy
+		if adj_w<min_w : adj_w=min_w
+		if adj_h<min_h : adj_h=min_h
+		if (adj_w!=ginfo_winx)|(adj_h!=ginfo_winy) {
+			oncmd 0
+			width2 adj_w,adj_h
+			oncmd 1
+		}
+		//
+		//以下、ウィンドウのサイズが変わった時の処理を書く
+		//
+		;CreateWindowEx 0, "Scintilla", "Scintilla", st, 0, 0, ginfo_winx, ginfo_winy, hwnd, 0x8000, hinstance, 0
+		;redraw 0
+		act = ginfo_act
+		gsel 0
+		dim rect,4
+		GetWindowRect hStatus,varptr(rect) : height=rect(3)-rect(1)	//height:ステータスバーの高さ
+		SetWindowPos hEdit,0,150,0,ginfo_winx-150, ginfo_winy-height,0
+		SetWindowPos hList,0,0,0,150,ginfo_winy-height,0
+		sendmsg hStatus, 0x5, 0, 0
+		gsel act,1
+		;redraw 1
+	}
+	return 0
+
+//メッセージの処理
+*OnCommand
+	if (lparam == hList){
+		hiword = (wparam >>16 )& 0xFFFF
+		if (hiword == 2){
+			sdim item
+			notesel list
+			noteget item,hListI
+			;dialog item
+			item = dir_cur + "\\" + item
+			notesel loadtext
+			noteload item
+			sendmsg hEdit,SCI_SETTEXT,0,varptr(loadtext)
+			title "SkEditor - "+item
+			return
+		}
+	}
+
+	cmd = wparam & 0xFFFF
+	if cmd == 1 : end
+	if cmd == 2 : gosub *settings
+	return
+
+*settings
+	if IsUsedWindow(1) == 1{
+		gsel 1,1
+		return
+	}else{
+		screen  1, 480,320
+		title "SkEditor Setting"
+		shwnd = hwnd
+		syscolor 15 : boxf
+	;	タブコントロールの設置。第3パラはbgscr命令で作成するウィンドウ
+	;	IDの初期値です。たとえば、下のように｢1｣でタブの項目が4個あると
+	;	すると、1～4のウィンドウが使われます。｢2｣でタブの項目が5個とすると、
+	;	2～6が使われます。別で使用するウィンドウID値と被らないよう注意。
+		pos 10,10
+		CreateTab ginfo_winx - 20, ginfo_winy - 50, 2
+	;	タブつまみ切り替え時に利用するタブコントロールのハンドルを取得
+		hTabControl = stat
+	
+	;	このサンプル上ではbgscr命令で作成したウィンドウID値｢1｣が使われ
+	;	ます。
+		InsertTab "システム"
+	;		bgscr命令上にオブジェクトを置く感覚で処理を書きます。
+			objsize 200,20
+			pos 10,10 : chkbox "起動時にアップデートの確認をする",setting(0)
+			objsize 200,20
+			pos 10,40 : chkbox "アクセシビリティに関する機能",setting(1)
+	
+		InsertTab "エディタ"
+			objsize 200,20
+			pos 10,10 : button gosub "文字のフォントを変更",*selmojifont
+			objsize 200,20
+			pos 10,40 : button gosub "行番号のフォントを変更",*selgyoufont
+	
+		InsertTab "キーコンフィグ"
+			pos 50, 50 : mes "C"
+	
+	;	bgscr命令ウィンドウのID値｢4｣が使われます。
+		InsertTab "実験的"
+			pos 50, 50 : mes "D"
+	
+	;	タブの項目追加が終わったら、タブ内に貼り付けたbgscr命令が非表示
+	;	状態になっているので、表示されるようgsel命令を指定。CreateTab命令で
+	;	指定したウィンドウIDの初期値と同じ値を指定します。
+		gsel 2, 1
+	
+	;	元々のscreen命令のウィンドウID 0に描画先を戻します。
+		gsel 1
+		oncmd gosub *notify, $4E
+	
+		return
+	}
+
+*selmojifont
+	gsel 0
+	dim result, 8
+	fontdlg result,0x100
+	if stat == 0:return
+	fontname = refstr
+	fontnameu = ""
+	sjis2utf8n fontnameu,fontname
+	sendmsg hEdit,SCI_STYLESETFONT,32,varptr(fontnameu)
+	sendmsg hEdit,SCI_STYLESETSIZE,32,result(2)
+	sendmsg hEdit, SCI_STYLECLEARALL
+	gosub *setstyle
+	font fontname,result(2)
+	gsel 1
+	return
+
+*selgyoufont
+	gsel 0
+	dim result, 8
+	fontdlg result,0x100
+	if stat == 0:return
+	fontname = refstr
+	fontnameu = ""
+	sjis2utf8n fontnameu,fontname
+	sendmsg hEdit,SCI_STYLESETFONT,STYLE_LINENUMBER,varptr(fontnameu)
+	sendmsg hEdit,SCI_STYLESETSIZE,STYLE_LINENUMBER,result(2)
+	gosub *setstyle
+	font fontname,result(2)
+	gsel 1
+	return
+
+;	タブ項目切り替え処理部分です。
+*notify
+	dupptr nmhdr, lparam, 12
+	if nmhdr.0 = hTabControl & nmhdr.2 = -551 {
+		ChangeTab
+;		元々のscreen命令のウィンドウID 0に描画先を戻します。
+		gsel 1
+		return
+	}else{
+		dupptr nmhdr, lparam, 92,4
+		if (nmhdr.0 == hEdit){
+			switch nmhdr(2)
+				case SCN_AUTOCCOMPLETED
+					/*
+					dialog length(nmhdr)
+					repeat length(nmhdr)
+					dialog nmhdr(cnt),0,str(cnt)
+					loop
+					*/
+					ptxt=nmhdr(7)
+					ptrtop=ptxt
+					CharNextW ptxt
+					c=stat&0xFF
+					ptxt+=IsWchar(c)+1
+					dupptr get , ptrtop , ptxt-ptrtop , vartype("str")
+					;sendmsg hEdit,SCI_GETCURRENTPOS
+					;curpos = stat
+					sendmsg hEdit,SCI_REPLACETARGET,curpos-ind,varptr(string)
+					get = strmid(get,0,curpos-ind)
+					seltxt = utf8n2sjis(get)
+					sendmsg hEdit,SCI_GOTOLINE,curline
+					sendmsg hEdit,SCI_SETCURRENTPOS,curpos
+					sendmsg hEdit,SCI_INSERTTEXT,0,varptr(seltxt)
+					sendmsg hEdit,SCI_AUTOCCANCEL
+					swbreak
+				case SCN_CHARADDED
+					sendmsg hEdit,SCI_GETCURRENTPOS
+					curpos = stat
+					sendmsg hEdit,SCI_LINEFROMPOSITION,curpos
+					curline = stat
+					sendmsg hEdit,SCI_GETLINESELSTARTPOSITION,curline
+					startPos = stat
+					sendmsg hEdit,SCI_GETLINESELENDPOSITION,curline
+					endPos = stat
+					sdim string
+					sendmsg hEdit,SCI_GETLINE,curline,varptr(string)
+					string = utf8n2sjis(string)
+					strrep string,"\t",""
+					wordList = ""
+					ind = 0
+					repeat
+						lastspace = instr(string,ind," ")
+						if lastspace==-1{
+							break
+						}
+						ind += lastspace+1
+					loop
+					string = strmid(string,ind,curpos)
+					strrep string," ",""
+					if ((endPos == startPos) && (startPos > 0)) {
+						sendmsg hEdit,SCI_AUTOCACTIVE
+						if (stat == 1){
+							sendmsg hEdit,SCI_AUTOCCANCEL
+							notesel keyws
+							repeat notemax
+								noteget b,cnt
+								strrep b,"\t",""
+								if b == "":continue
+								if instr(b,0,string) != -1{
+									logmes "ヒット: "+b
+									wordList = wordList + b + " "
+									if b == string{
+										aa = b
+									}
+								}else{
+									logmes "ノーヒット: "+b
+								}
+							loop
+							sendmsg hEdit,SCI_AUTOCSETIGNORECASE,1
+							sendmsg hEdit,SCI_AUTOCETCASEINSENSITIVEBEHAVIOUR,1
+							sendmsg hEdit,SCI_AUTOCSETORDER,1
+							sendmsg hEdit,SCI_AUTOCSELECT,0,varptr(aa)
+							wordList=strmid(wordList,0,strlen(wordList)-1)
+							sjis2utf8n keywsu,wordList
+							if wordList != ""{
+								poss = curpos-ind
+								sendmsg hEdit,SCI_AUTOCSHOW,varptr(poss),varptr(keywsu)
+								sendmsg hEdit,SCI_AUTOCSETAUTOHIDE,1
+							}
+						}else{
+							notesel keyws
+							repeat notemax
+								noteget b,cnt
+								if instr(b,0,string) != -1{
+									logmes "ヒット: "+b
+									wordList = wordList + b + " "
+									if b == string{
+										aa = b
+									}
+								}else{
+									logmes "ノーヒット: "+b
+								}
+							loop
+							sendmsg hEdit,SCI_AUTOCSETIGNORECASE,1
+							sendmsg hEdit,SCI_AUTOCETCASEINSENSITIVEBEHAVIOUR,1
+							sendmsg hEdit,SCI_AUTOCSETORDER,1
+							sendmsg hEdit,SCI_AUTOCSELECT,0,varptr(aa)
+							wordList=strmid(wordList,0,strlen(wordList)-1)
+							sjis2utf8n keywsu,wordList
+							if wordList != ""{
+								poss = curpos-ind
+								sendmsg hEdit,SCI_AUTOCSHOW,varptr(poss),varptr(keywsu)
+								sendmsg hEdit,SCI_AUTOCSETAUTOHIDE,1
+							}
+						}
+					}
+					swbreak
+			swend
+		}
+	}
+	return
+
+*setstyle
+	//スタイル設定
+	sendmsg hEdit,SCI_STYLESETFORE,2,0xff0000	//行コメント
+	sendmsg hEdit,SCI_STYLESETITALIC,2,1
+	sendmsg hEdit,SCI_STYLESETFORE,5,0x0000ff	//キーワード
+	sendmsg hEdit,SCI_STYLESETBOLD,5,1
+	sendmsg hEdit,SCI_STYLESETFORE,6,0x00ff00	//文字列
+	sendmsg hEdit,SCI_STYLESETFORE,9,0x808080	//プリプロセッサ
+	return
+
+*exit
+	if wparam != 0{
+		gsel 1,-1
+		return
+	}
+	end

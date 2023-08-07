@@ -1,0 +1,96 @@
+on
+break
+place
+join
+joining
+quit
+drop
+pick up
+chat
+damage
+death
+command
+set
+add
+remove
+from
+loop
+all
+player
+players
+block
+blocks
+item
+items
+entity
+entities
+loop-player
+loop-entity
+loop-block
+loop-item
+send
+message
+broadcast
+if
+is
+greater than
+less than
+equal
+or
+and
+every
+year
+years
+months
+month
+days
+day
+hours
+hour
+minutes
+minute
+seconds
+second
+ticks
+tick
+loop
+times
+full
+size of
+number of
+text
+number
+integer
+item
+items
+	description:
+	usage:
+	permission:
+	permission message:
+	executable by:
+	aliases:
+	trigger:
+title
+with
+subtitle
+action
+bar
+actionbar
+tablist
+tab
+list
+name
+display
+nickname
+prefix
+suffix
+location
+health
+max
+hunger
+level
+progress
+sender
+login
+logging
+in
