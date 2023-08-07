@@ -1,7 +1,7 @@
 # SkEditor
 Skriptを簡単に編集できるように[Hot Soup Processor v3.6](https://hsp.tv/)で作られたエディタです。
 ## Requirements
-SkEditorではWindowsが必要です。当然のことですが、MacやLinuxでは動作しません。Windows 10が推奨されます。  
+SkEditorを動作させるにはWindowsが必要です。当然のことですが、MacやLinuxでは動作しません。Windows 10が推奨されます。  
   
 SkEditorは現在Windows 10でしか動作確認が取れていませんが、Windows XP～Windows 8.1、Windows 11でも動作すると思います。  
   
